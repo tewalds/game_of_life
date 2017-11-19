@@ -11,6 +11,7 @@ import re
 import sys
 import time
 
+from future.builtins import range  # pylint: disable=redefined-builtin
 import numpy as np
 import pygame
 
@@ -146,7 +147,7 @@ def main():
   parser.add_argument('--px_size', default=2, type=int, help='Pixel size')
   parser.add_argument('--steps', default=1000000000, type=int, help='Steps before exiting')
   parser.add_argument('--skip', default=1, type=int, help='Steps between rendering')
-  parser.add_argument('--sleep', default=0, type=float, help='Sleep between steps')
+  parser.add_argument('--fps', default=100, type=float, help='Max fps')
   parser.add_argument('--start_rand', default=0.1, type=float, help='Noise per step')
   parser.add_argument('--noise', default=0, type=float, help='Noise per step')
   parser.add_argument('--no_reset', action='store_true', help="Continue even if it's stabilized.")
@@ -174,7 +175,8 @@ def main():
   try:
     history = set()
     start = time.time()
-    for step in xrange(args.steps):
+    for step in range(args.steps):
+      step_start_time = time.time()
       if step % args.skip == 0:
         draw(window, state)
       state = update(state)
@@ -190,12 +192,29 @@ def main():
           history.clear()
         else:
           history.add(h)
-      if args.sleep:
-        time.sleep(args.sleep)
+      for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+          return
+        elif event.type == pygame.KEYDOWN:
+          if event.key in (pygame.K_ESCAPE, pygame.K_F4):
+            return
+          elif event.key in (pygame.K_PAGEUP, pygame.K_PAGEDOWN):
+            if pygame.key.get_mods() & pygame.KMOD_CTRL:
+              if event.key == pygame.K_PAGEUP:
+                args.skip += 1
+              elif args.skip > 1:
+                args.skip -= 1
+              print("New skip:", args.skip)
+            else:
+              args.fps *= 1.25 if event.key == pygame.K_PAGEUP else 1 / 1.25
+              print("New max fps: %.1f" % args.fps)
+      elapsed_time = time.time() - step_start_time
+      time.sleep(max(0, 1 / args.fps - elapsed_time))
   except KeyboardInterrupt:
     pass
-  elapsed = time.time() - start
-  print("Ran %s steps in %0.3f seconds: %.0f steps/second" % (step, elapsed, step / elapsed))
+  finally:
+    elapsed = time.time() - start
+    print("Ran %s steps in %0.3f seconds: %.0f steps/second" % (step, elapsed, step / elapsed))
 
 
 if __name__ == "__main__":
